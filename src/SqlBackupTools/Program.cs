@@ -40,6 +40,8 @@ namespace SqlBackupTools
 
         internal static async Task LaunchCommandAsync(this GeneralCommandInfos command, ILogger logger, CancellationToken ct)
         {
+            await command.ApplySecretsFileAsync();
+
             switch (command)
             {
                 case CleanCommand clean:

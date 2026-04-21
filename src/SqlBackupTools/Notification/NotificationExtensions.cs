@@ -3,8 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using MailKit.Net.Smtp;
-using MimeKit;
+using Serilog;
 using SqlBackupTools.Helpers;
 using SqlBackupTools.Restore;
 
@@ -13,19 +12,17 @@ namespace SqlBackupTools.Notification
     public static class NotificationExtensions
     {
         private static CultureInfo _c = CultureInfo.InvariantCulture;
-        public static async Task SendMailAsync(this ReportState state,string email, string smtp, CancellationToken cancellationToken)
+
+        public static async Task SendMailgunAsync(this ReportState state, GeneralCommandInfos cfg, ILogger logger, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(smtp))
+            if (string.IsNullOrWhiteSpace(cfg.Email)
+                || string.IsNullOrWhiteSpace(cfg.MailgunApiKey)
+                || string.IsNullOrWhiteSpace(cfg.MailgunDomain))
             {
                 return;
             }
 
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("SQL backup", email));
-            message.To.Add(new MailboxAddress("SQL backup", email));
-
-            message.Subject =
-                $"Restore Backup {Environment.MachineName} : {state.Restored.Count}/{state.TotalProcessed}";
+            var subject = $"Restore Backup {Environment.MachineName} : {state.Restored.Count}/{state.TotalProcessed}";
 
             var sb = new StringBuilder();
             sb.AppendLine(_c, $"Restore finished in {state.TotalTime.HumanizedTimeSpan()}");
@@ -38,7 +35,6 @@ namespace SqlBackupTools.Notification
                 {
                     sb.AppendLine(_c, $"{e.Item.Name} : {e.Error}");
                 }
-
                 sb.AppendLine();
             }
 
@@ -57,7 +53,7 @@ namespace SqlBackupTools.Notification
                 sb.AppendLine(_c, $"Missing .bak : {state.MissingFull.Count}");
                 foreach (var w in state.MissingFull)
                 {
-                    sb.AppendLine($"Missing .bak in folder " + w.Path);
+                    sb.AppendLine("Missing .bak in folder " + w.Path);
                 }
                 sb.AppendLine();
             }
@@ -72,15 +68,12 @@ namespace SqlBackupTools.Notification
                 sb.AppendLine();
             }
 
-            message.Body = new TextPart("plain")
-            {
-                Text = sb.ToString()
-            };
+            var from = string.IsNullOrWhiteSpace(cfg.MailgunFrom)
+                ? $"SQL backup <sqlbackup@{cfg.MailgunDomain}>"
+                : cfg.MailgunFrom;
 
-            using var client = new SmtpClient();
-            await client.ConnectAsync(smtp, 25, false, cancellationToken);
-            await client.SendAsync(message, cancellationToken);
-            await client.DisconnectAsync(true, cancellationToken);
+            var client = new MailgunClient(logger, cfg.MailgunBaseUrl, cfg.MailgunApiKey, cfg.MailgunDomain);
+            await client.SendAsync(from, cfg.Email, subject, sb.ToString(), cancellationToken);
         }
     }
 }
