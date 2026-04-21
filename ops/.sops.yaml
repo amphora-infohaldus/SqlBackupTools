@@ -1,0 +1,20 @@
+# SOPS config for ops/config/secrets.enc.yaml
+#
+# Each server that needs to decrypt the secrets file must be listed here by age
+# public key. To add a server: generate an age keypair on it, paste the public
+# key below, commit, then run:
+#   sops updatekeys ops/config/secrets.enc.yaml
+#
+# Pattern matches: encrypted-regex guards against accidentally committing plain
+# values for any field whose name implies a secret. All other fields stay clear.
+
+creation_rules:
+  - path_regex: ops/config/secrets\.enc\.yaml$
+    encrypted_regex: '^(.*_password|.*_pw|.*_secret|.*_key|.*_token)$'
+    age: >-
+      # SQL-2022 (10.0.0.35) — public key TBD, replace on first bootstrap:
+      # age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+      # PREMIUM-2022 (10.0.0.45) — public key TBD:
+      # age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+      # RESERV-2025 (10.0.0.47) — public key TBD:
+      # age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

@@ -6,3 +6,16 @@ obj/
 *.user
 launchSettings.json
 /src/
+
+# ops secrets - SOPS-encrypted yaml IS committed; plain must never be
+ops/config/secrets.yaml
+ops/config/secrets.dec.yaml
+ops/config/*.local.*
+ops/config/local-*.ps1
+
+# local test scratch - don't commit
+*.sql.local
+/*.local.sql
+
+# Claude Code session state - per-user, not part of the repo
+.claude/
