@@ -2,14 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repo layout — two independent halves
+## Repo layout
 
-This is Amphora's fork (`amphora-infohaldus/SqlBackupTools`) of Lucca's upstream tool. It contains two distinct things that should not leak into each other:
+Originally a fork of LuccaSA/SqlBackupTools, now a **hard fork** — Amphora is not planning to contribute back. `src/` can be rewritten and modified freely to match Amphora's requirements; don't hold back changes out of upstream-mergeability.
 
-- **`src/` and `tests/`** — the upstream .NET tool. Keep clean for upstream merges. Don't put Amphora-specific config / scripts here.
-- **`ops/`** — Amphora's DR automation (Ola Hallengren jobs, SIMPLE→FULL conversion, claude readonly login, RichCopy360 specs, cutover runbooks). All Amphora-specific operational scripts live here. See `ops/README.md`.
+- **`src/` and `tests/`** — the .NET restore daemon. Fair game for Amphora-specific changes (multi-file DB handling, exclusion semantics, tenant-specific logic, etc.).
+- **`ops/`** — Amphora's DR automation (Ola Hallengren jobs, SIMPLE→FULL conversion, claude readonly login, RichCopy360 specs, cutover runbooks, recovery runbooks). See `ops/README.md`.
 
 When the user asks about "the DR plan", "log shipping", "backup scripts", they mean `ops/`. When they ask about "SqlBackupTools" the tool itself, they mean `src/`.
+
+### Line endings
+
+Repo has `core.autocrlf=false` and no `.gitattributes`. Some `src/` files are stored as LF in the index; the working copy may be CRLF on Windows. The `Write`/`Edit` tools save LF by default, which matches the index — but if you ever see a 400-line diff on a small change, check `git ls-files --eol <path>` and normalize to match `i/` (index) line endings before committing.
 
 ## Project
 
