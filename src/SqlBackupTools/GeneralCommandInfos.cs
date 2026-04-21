@@ -29,8 +29,8 @@ namespace SqlBackupTools
         [Option("timeout", HelpText = "SQL Command timeout in seconds")]
         public int Timeout { get; set; } = 90 * 60; // 1h
 
-        [Option('e', "encrypt", HelpText = "Uses SSL encryption for all data sent between the client and server")]
-        public bool Encrypt { get; set; }
+        [Option("no-encrypt", HelpText = "Disable TLS encryption for the SQL connection. Default: encryption on with TrustServerCertificate=true (encrypted on wire, cert not verified). Only use on a trusted LAN.")]
+        public bool NoEncrypt { get; set; }
 
         [Option("logs", HelpText = "Log folder")]
         public DirectoryInfo LogsPath { get; set; }
@@ -63,7 +63,7 @@ namespace SqlBackupTools
 
         public SqlConnection CreateConnectionMars(string database = "master")
         {
-            var builder = Hostname.PrepareSqlConnectionStringBuilder(database, Login, Password, Timeout);
+            var builder = Hostname.PrepareSqlConnectionStringBuilder(database, Login, Password, Timeout, encrypt: !NoEncrypt);
             var connection = new SqlConnection(builder.ConnectionString);
             connection.Open();
             return connection;

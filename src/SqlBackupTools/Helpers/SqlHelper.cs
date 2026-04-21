@@ -5,7 +5,7 @@ namespace SqlBackupTools.Helpers
 {
     internal static class SqlHelper
     {
-        public static SqlConnectionStringBuilder PrepareSqlConnectionStringBuilder(this string hostName, string database = null, string login = null, string password = null, int timeout = 120, bool encrypt = false)
+        public static SqlConnectionStringBuilder PrepareSqlConnectionStringBuilder(this string hostName, string database = null, string login = null, string password = null, int timeout = 120, bool encrypt = true, bool trustServerCertificate = true)
         {
             if (string.IsNullOrWhiteSpace(hostName))
             {
@@ -22,6 +22,7 @@ namespace SqlBackupTools.Helpers
                 ApplicationName = "SqlBackupTools",
                 ConnectTimeout = timeout,
                 Encrypt = encrypt,
+                TrustServerCertificate = trustServerCertificate,
                 MultipleActiveResultSets = true
             };
             if (!String.IsNullOrWhiteSpace(login) && !String.IsNullOrWhiteSpace(password))

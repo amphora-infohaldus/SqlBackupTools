@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using SqlBackupTools.Helpers;
 
 namespace SqlBackupTools.Restore.Native
 {
@@ -158,13 +159,15 @@ namespace SqlBackupTools.Restore.Native
             bool singleUserMode = false;
             try
             {
+                var dbIdent = SqlIdentifier.BracketQuote(item.Name);
+                var dbLiteral = SqlIdentifier.NQuote(item.Name);
                 if (_state.ActualDbs.TryGetValue(item.Name, out var databaseInfo) && databaseInfo.State != DatabaseState.RESTORING)
                 {
                     singleUserMode = true;
-                    await sqlConnection.ExecuteAsync($"ALTER DATABASE [{item.Name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE", commandTimeout: _state.RestoreCommand.Timeout);
+                    await sqlConnection.ExecuteAsync($"ALTER DATABASE {dbIdent} SET SINGLE_USER WITH ROLLBACK IMMEDIATE", commandTimeout: _state.RestoreCommand.Timeout);
                 }
-                await sqlConnection.ExecuteAsync($"DROP DATABASE [{item.Name}]", commandTimeout: _state.RestoreCommand.Timeout);
-                await sqlConnection.ExecuteAsync($"EXEC msdb.dbo.sp_delete_database_backuphistory @database_name = N'{item.Name}'", commandTimeout: _state.RestoreCommand.Timeout);
+                await sqlConnection.ExecuteAsync($"DROP DATABASE {dbIdent}", commandTimeout: _state.RestoreCommand.Timeout);
+                await sqlConnection.ExecuteAsync($"EXEC msdb.dbo.sp_delete_database_backuphistory @database_name = {dbLiteral}", commandTimeout: _state.RestoreCommand.Timeout);
             }
             catch (Exception e)
             {
@@ -247,7 +250,7 @@ namespace SqlBackupTools.Restore.Native
                                 break;
                             case RetryStrategy.ExtractHeaders:
                                 var infos = await sqlConnection.QueryAsync<Headers>(
-                                    $"RESTORE HEADERONLY FROM DISK='{currentLogFile.FullName}'",
+                                    $"RESTORE HEADERONLY FROM DISK = {SqlIdentifier.NQuote(currentLogFile.FullName)}",
                                     commandTimeout: _state.RestoreCommand.Timeout);
 
                                 foreach (var info in infos.OrderBy(i => int.Parse(i.Position, NumberFormatInfo.InvariantInfo)))
@@ -339,42 +342,41 @@ namespace SqlBackupTools.Restore.Native
             SqlConnection sqlConnection, FileInfo fullFile)
         {
             var sb = new StringBuilder();
-            sb.Append("RESTORE DATABASE [");
-            sb.Append(item.Name);
-            sb.Append("] FROM DISK = N'");
-            sb.Append(fullFile.FullName);
-            sb.Append("' WITH NORECOVERY, REPLACE");
+            sb.Append("RESTORE DATABASE ");
+            sb.Append(SqlIdentifier.BracketQuote(item.Name));
+            sb.Append(" FROM DISK = ");
+            sb.Append(SqlIdentifier.NQuote(fullFile.FullName));
+            sb.Append(" WITH NORECOVERY, REPLACE");
 
             if (modeFileList)
             {
                 // Multi-file DBs need one MOVE per logical file, else SQL Server falls back
                 // to the backup's original physical paths and fails with 5133.
-                var infos = await sqlConnection.QueryAsync<FileListInfo>($"RESTORE FILELISTONLY FROM DISK='{fullFile.FullName}'",
+                var infos = await sqlConnection.QueryAsync<FileListInfo>(
+                    $"RESTORE FILELISTONLY FROM DISK = {SqlIdentifier.NQuote(fullFile.FullName)}",
                     commandTimeout: _state.RestoreCommand.Timeout);
                 foreach (var f in infos)
                 {
                     var root = f.Type == 'L' ? _state.ServerInfos.LogPath : _state.ServerInfos.DataPath;
                     var target = Path.Combine(root, Path.GetFileName(f.PhysicalName));
-                    sb.Append(", MOVE '");
-                    sb.Append(f.LogicalName);
-                    sb.Append("' TO '");
-                    sb.Append(target);
-                    sb.Append('\'');
+                    sb.Append(", MOVE ");
+                    sb.Append(SqlIdentifier.Quote(f.LogicalName));
+                    sb.Append(" TO ");
+                    sb.Append(SqlIdentifier.Quote(target));
                 }
             }
             else
             {
                 var dataPath = Path.Combine(_state.ServerInfos.DataPath, item.Name + ".mdf");
                 var logPath = Path.Combine(_state.ServerInfos.LogPath, item.Name + "_log.ldf");
-                sb.Append(", MOVE '");
-                sb.Append(item.Name);
-                sb.Append("' TO '");
-                sb.Append(dataPath);
-                sb.Append("', MOVE '");
-                sb.Append(item.Name);
-                sb.Append("_Log' TO '");
-                sb.Append(logPath);
-                sb.Append('\'');
+                sb.Append(", MOVE ");
+                sb.Append(SqlIdentifier.Quote(item.Name));
+                sb.Append(" TO ");
+                sb.Append(SqlIdentifier.Quote(dataPath));
+                sb.Append(", MOVE ");
+                sb.Append(SqlIdentifier.Quote(item.Name + "_Log"));
+                sb.Append(" TO ");
+                sb.Append(SqlIdentifier.Quote(logPath));
             }
             if (_state.RestoreCommand.MaxTransferSize.HasValue)
             {
@@ -396,12 +398,11 @@ namespace SqlBackupTools.Restore.Native
         private string RestoreLogCommand(RestoreItem item, FileInfo lastLog, int fileId = 1)
         {
             var sb = new StringBuilder();
-            sb.Append("RESTORE LOG [");
-            sb.Append(item.Name);
-            sb.Append("] FROM  DISK = N'");
-            sb.Append(lastLog.FullName);
-
-            sb.Append("' WITH FILE = ");
+            sb.Append("RESTORE LOG ");
+            sb.Append(SqlIdentifier.BracketQuote(item.Name));
+            sb.Append(" FROM  DISK = ");
+            sb.Append(SqlIdentifier.NQuote(lastLog.FullName));
+            sb.Append(" WITH FILE = ");
             sb.Append(fileId);
             sb.Append(", ");
 

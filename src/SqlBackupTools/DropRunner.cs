@@ -70,12 +70,14 @@ namespace SqlBackupTools
                     int i = Interlocked.Increment(ref counter);
                     try
                     {
+                        var dbIdent = SqlIdentifier.BracketQuote(item.Name);
+                        var dbLiteral = SqlIdentifier.NQuote(item.Name);
                         if (state.TryGetValue(item.Name, out var databaseInfo) && databaseInfo.State != DatabaseState.RESTORING)
                         {
-                            await connection.ExecuteAsync($"ALTER DATABASE [{item.Name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE", commandTimeout: _timeout);
+                            await connection.ExecuteAsync($"ALTER DATABASE {dbIdent} SET SINGLE_USER WITH ROLLBACK IMMEDIATE", commandTimeout: _timeout);
                         }
-                        await connection.ExecuteAsync($"DROP DATABASE [{item.Name}]", commandTimeout: _timeout);
-                        await connection.ExecuteAsync($"EXEC msdb.dbo.sp_delete_database_backuphistory @database_name = N'{item.Name}'", commandTimeout: _timeout);
+                        await connection.ExecuteAsync($"DROP DATABASE {dbIdent}", commandTimeout: _timeout);
+                        await connection.ExecuteAsync($"EXEC msdb.dbo.sp_delete_database_backuphistory @database_name = {dbLiteral}", commandTimeout: _timeout);
                     }
                     catch (Exception e)
                     {
