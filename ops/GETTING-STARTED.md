@@ -37,7 +37,7 @@ Do this interactively via RDP as an account with local admin rights.
 
 ### Back on your workstation
 
-- [ ] Paste the three public keys into `ops/.sops.yaml` — replace the `# age1xxx` TBD placeholders with real values.
+- [ ] Paste the three public keys into `.sops.yaml` (repo root, not `ops/`) — uncomment and fill in the `# - age1...` lines for each server. SOPS's config lookup walks up from the current working directory, so the file must be at or above where you invoke `sops`.
 - [ ] Copy `ops/config/secrets.enc.yaml.example` to `ops/config/secrets.enc.yaml`. Fill in actual values for:
   - `claude_password` (current `claude` login password — rotate from the placeholder)
   - `sqlbackupcert_export_password` (the password used when exporting the cert — needed later for rotations)

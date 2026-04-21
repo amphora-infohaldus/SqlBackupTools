@@ -1,0 +1,24 @@
+# SOPS config for ops/config/secrets.enc.yaml
+#
+# Recipients below are the age PUBLIC keys allowed to decrypt secrets. To add a
+# new server: generate an age keypair on it, paste the public key into the
+# `age:` list, commit, then run:
+#   sops updatekeys ops/config/secrets.enc.yaml
+# so existing encrypted files include the new recipient.
+#
+# encrypted_regex guards against committing plain values for any field whose
+# name implies a secret. All other fields stay in the clear.
+
+creation_rules:
+  - path_regex: secrets\.enc\.yaml$
+    encrypted_regex: '^(.*_password|.*_pw|.*_secret|.*_key|.*_token)$'
+    key_groups:
+      - age:
+          # claude_ai automation workstation (Claude agent identity):
+          - age13ts82kesvcy549c96mh9ge94qv2csxqq0h8xm5x7cn048nq9nezsw47ygm
+          # SQL-2022 (10.0.0.35) - public key TBD, replace on first bootstrap:
+          # - age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          # PREMIUM-2022 (10.0.0.45) - public key TBD:
+          # - age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          # RESERV-2025 (10.0.0.47) - public key TBD:
+          # - age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
