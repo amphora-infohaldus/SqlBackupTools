@@ -1,5 +1,7 @@
 # Amphora SQL DR Automation
 
+> **New here?** Start with [`GETTING-STARTED.md`](GETTING-STARTED.md) — step-by-step task list, top to bottom.
+
 This folder holds all operational scripts for the continuous log-shipping / DR pipeline from **SQL-2022** and **PREMIUM-2022** to **RESERV-2025**. It lives inside the `amphora-infohaldus/SqlBackupTools` repo (a fork of Lucca's tool, which we use for the continuous-restore daemon on RESERV).
 
 > **The `.NET` source tree in `src/` is upstream Lucca's tool — do not touch it here.** Everything Amphora-specific lives under `ops/`.
