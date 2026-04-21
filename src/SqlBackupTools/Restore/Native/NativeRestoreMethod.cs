@@ -57,6 +57,7 @@ namespace SqlBackupTools.Restore.Native
             bool modeFileList = false;
             bool forceRestoreFull = startFromFull;
             int maxRetry = 2;
+            Exception pendingRetryException = null;
             while (maxRetry > 0)
             {
                 maxRetry--;
@@ -119,7 +120,7 @@ namespace SqlBackupTools.Restore.Native
                         await RestoreLogAsync(item, lastRestored, sqlConnection);
                     }
 
-                    break;
+                    return null;
                 }
                 catch (SqlException sqle) when (sqle.IsRecoverable())
                 {
@@ -127,6 +128,7 @@ namespace SqlBackupTools.Restore.Native
                     item.StatsDropped++;
                     _state.Loggger.Debug(sqle, item.Name + " : Error on first attempt, retrying from scratch");
                     forceRestoreFull = true;
+                    pendingRetryException = sqle;
                     var exc = await DropDatabaseWhileTryingRestore(item, sqlConnection);
                     if (exc != null)
                     {
@@ -139,13 +141,16 @@ namespace SqlBackupTools.Restore.Native
                     // 3234 : logical filename mismatch, try with FileInfo
                     // 5133 : Directory lookup for the file failed with the operating system error
                     modeFileList = true;
+                    pendingRetryException = sqle;
                 }
                 catch (Exception e)
                 {
                     return e;
                 }
             }
-            return null;
+            // Retries exhausted without break — surface the last retryable exception
+            // instead of silently claiming success.
+            return pendingRetryException;
         }
 
         private async Task<Exception> DropDatabaseWhileTryingRestore(RestoreItem item, SqlConnection sqlConnection)
@@ -333,35 +338,44 @@ namespace SqlBackupTools.Restore.Native
         private async Task<string> RestoreFullSqlCommandAsync(RestoreItem item, bool modeFileList,
             SqlConnection sqlConnection, FileInfo fullFile)
         {
-            var dataPath = Path.Combine(_state.ServerInfos.DataPath, item.Name + ".mdf");
-            var logPath = Path.Combine(_state.ServerInfos.LogPath, item.Name + "_log.ldf");
-
-            string logicalData = item.Name;
-            string logicalLog = $"{item.Name}_Log";
-
-            if (modeFileList)
-            {
-                var infos = await sqlConnection.QueryAsync<FileListInfo>($"RESTORE FILELISTONLY FROM DISK='{fullFile.FullName}'",
-                    commandTimeout: _state.RestoreCommand.Timeout);
-                logicalData = infos.Where(f => f.Type == 'D').Select(f => f.LogicalName).First();
-                logicalLog = infos.Where(f => f.Type == 'L').Select(f => f.LogicalName).First();
-            }
-
             var sb = new StringBuilder();
             sb.Append("RESTORE DATABASE [");
             sb.Append(item.Name);
             sb.Append("] FROM DISK = N'");
             sb.Append(fullFile.FullName);
-            sb.Append("' WITH NORECOVERY");
-            sb.Append(", REPLACE, MOVE '");
-            sb.Append(logicalData);
-            sb.Append("' TO '");
-            sb.Append(dataPath);
-            sb.Append("', MOVE '");
-            sb.Append(logicalLog);
-            sb.Append("' TO '");
-            sb.Append(logPath);
-            sb.Append('\'');
+            sb.Append("' WITH NORECOVERY, REPLACE");
+
+            if (modeFileList)
+            {
+                // Multi-file DBs need one MOVE per logical file, else SQL Server falls back
+                // to the backup's original physical paths and fails with 5133.
+                var infos = await sqlConnection.QueryAsync<FileListInfo>($"RESTORE FILELISTONLY FROM DISK='{fullFile.FullName}'",
+                    commandTimeout: _state.RestoreCommand.Timeout);
+                foreach (var f in infos)
+                {
+                    var root = f.Type == 'L' ? _state.ServerInfos.LogPath : _state.ServerInfos.DataPath;
+                    var target = Path.Combine(root, Path.GetFileName(f.PhysicalName));
+                    sb.Append(", MOVE '");
+                    sb.Append(f.LogicalName);
+                    sb.Append("' TO '");
+                    sb.Append(target);
+                    sb.Append('\'');
+                }
+            }
+            else
+            {
+                var dataPath = Path.Combine(_state.ServerInfos.DataPath, item.Name + ".mdf");
+                var logPath = Path.Combine(_state.ServerInfos.LogPath, item.Name + "_log.ldf");
+                sb.Append(", MOVE '");
+                sb.Append(item.Name);
+                sb.Append("' TO '");
+                sb.Append(dataPath);
+                sb.Append("', MOVE '");
+                sb.Append(item.Name);
+                sb.Append("_Log' TO '");
+                sb.Append(logPath);
+                sb.Append('\'');
+            }
             if (_state.RestoreCommand.MaxTransferSize.HasValue)
             {
                 sb.Append(", MAXTRANSFERSIZE = ");
