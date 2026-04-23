@@ -4,6 +4,12 @@
 
 $ErrorActionPreference = 'Stop'
 $exe = 'C:\SqlBackupTools\SqlBackupTools.exe'
+$logDir = 'C:\SqlBackupTools\logs'
+# The exe's Serilog config checks DirectoryInfo.Exists before using --logs.
+# If the folder is missing it falls back to CWD-relative 'logs/', which under
+# SYSTEM lands in C:\Windows\System32\logs\. mkdir here is idempotent.
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
 $folders = @(
     'C:\SqlBackup\PREMIUM-2022',
     'C:\SqlBackup\SQL-2022'

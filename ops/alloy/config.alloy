@@ -1,0 +1,116 @@
+// RESERV-2025 Alloy config. Tails SqlBackupTools Serilog logs and forwards
+// to the prod Amphora OTel endpoint (nginx on 10.0.5.1 → cluster Alloy).
+//
+// Environment-specific values arrive via env vars set by the Windows service
+// wrapper (NSSM AppEnvironmentExtra):
+//
+//   OTEL_ENDPOINT           https://otel.svc.amphora.ee
+//   OTEL_BEARER_TOKEN       bearer for the cloud receiver
+//   DEPLOYMENT_ENVIRONMENT  production
+//
+// Pattern mirrors AmphoraServerConfig/alloy/config.alloy but swaps the OTLP
+// receiver for a file-tail source, and stamps service.name as sqlbackuptools.
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// ---- File tailing ---------------------------------------------------------
+// Serilog writes one file per day into C:\SqlBackupTools\logs\restore-<date>.log.
+// loki.source.file tails every matching file and forwards each line as a
+// Loki-format log record.
+local.file_match "sqlbackup_logs" {
+  path_targets = [
+    { "__path__" = "C:/SqlBackupTools/logs/*.log" },
+  ]
+}
+
+loki.source.file "sqlbackup" {
+  targets    = local.file_match.sqlbackup_logs.targets
+  forward_to = [otelcol.receiver.loki.bridge.receiver]
+}
+
+// Loki-format → OTel bridge so the existing OTel processor chain applies.
+otelcol.receiver.loki "bridge" {
+  output {
+    logs = [otelcol.processor.transform.stamp.input]
+  }
+}
+
+// ---- Resource stamping ----------------------------------------------------
+// service.name and deployment.environment land as OTLP *resource* attributes
+// so the Loki exporter on the cloud side promotes them to indexed labels.
+otelcol.processor.transform "stamp" {
+  log_statements {
+    context    = "resource"
+    statements = [
+      `set(attributes["service.name"], "sqlbackuptools")`,
+      `set(attributes["deployment.environment"], "` + sys.env("DEPLOYMENT_ENVIRONMENT") + `")`,
+    ]
+  }
+
+  output {
+    logs = [otelcol.processor.resourcedetection.default.input]
+  }
+}
+
+otelcol.processor.resourcedetection "default" {
+  detectors = ["env", "system"]
+  system {
+    hostname_sources = ["os"]
+  }
+
+  output {
+    logs = [otelcol.processor.attributes.loki_label_hint.input]
+  }
+}
+
+// Hint which resource attributes should become indexed Loki labels. Without
+// this the attributes end up in structured_metadata and label queries fail.
+otelcol.processor.attributes "loki_label_hint" {
+  action {
+    key    = "loki.resource.labels"
+    action = "insert"
+    value  = "service.name,deployment.environment,host.name"
+  }
+
+  output {
+    logs = [otelcol.processor.batch.default.input]
+  }
+}
+
+// ---- Batch + buffer -------------------------------------------------------
+otelcol.processor.batch "default" {
+  timeout         = "5s"
+  send_batch_size = 500
+
+  output {
+    logs = [otelcol.exporter.otlphttp.cloud.input]
+  }
+}
+
+// ---- Cloud exporter -------------------------------------------------------
+otelcol.auth.bearer "cloud" {
+  token = sys.env("OTEL_BEARER_TOKEN")
+}
+
+otelcol.exporter.otlphttp "cloud" {
+  client {
+    endpoint = sys.env("OTEL_ENDPOINT")
+    auth     = otelcol.auth.bearer.cloud.handler
+  }
+
+  sending_queue {
+    enabled       = true
+    num_consumers = 2
+    queue_size    = 5000
+  }
+
+  retry_on_failure {
+    enabled          = true
+    initial_interval = "1s"
+    max_interval     = "30s"
+    max_elapsed_time = "5m"
+  }
+}
