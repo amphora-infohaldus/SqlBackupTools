@@ -1,0 +1,152 @@
+{
+  "title": "SqlBackupTools — RESERV continuous restore",
+  "uid": "sqlbackuptools",
+  "tags": ["sqlbackuptools", "amphora", "dr"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Last cycle exit code",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sqlbackup_task_last_exit_code", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 1, "color": "red" }
+          ] },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "OK" } } }]
+        }
+      },
+      "options": { "graphMode": "none", "colorMode": "background" }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Cycle last ran",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "time() - sqlbackup_task_last_run_timestamp_seconds", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 600, "color": "yellow" },
+            { "value": 1800, "color": "red" }
+          ] }
+        }
+      },
+      "options": { "graphMode": "area", "colorMode": "background" }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Collector last emit",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "time() - sqlbackup_metrics_collector_timestamp_seconds", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 120, "color": "yellow" },
+            { "value": 300, "color": "red" }
+          ] }
+        }
+      },
+      "options": { "graphMode": "area", "colorMode": "background" }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Max RPO across all DBs",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "max(sqlbackup_rpo_seconds)", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "green" },
+            { "value": 3600, "color": "yellow" },
+            { "value": 14400, "color": "red" }
+          ] }
+        }
+      },
+      "options": { "graphMode": "area", "colorMode": "background" }
+    },
+    {
+      "id": 5, "type": "stat", "title": "RESERV C: free",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "expr": "sqlbackup_disk_free_bytes / (sqlbackup_disk_free_bytes + sqlbackup_disk_used_bytes)",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "value": null, "color": "red" },
+            { "value": 0.1, "color": "yellow" },
+            { "value": 0.2, "color": "green" }
+          ] }
+        }
+      },
+      "options": { "graphMode": "area", "colorMode": "background" }
+    },
+
+    {
+      "id": 10, "type": "timeseries", "title": "RPO per DB",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "topk(30, sqlbackup_rpo_seconds)",
+        "legendFormat": "{{db_name}}",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": { "legend": { "displayMode": "list", "placement": "right", "showLegend": true } }
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Ship-folder freshness per DB (age of newest .trn)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "topk(30, sqlbackup_ship_newest_trn_age_seconds)",
+        "legendFormat": "{{primary}}/{{db_name}}",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": { "legend": { "displayMode": "list", "placement": "right", "showLegend": true } }
+    },
+
+    {
+      "id": 20, "type": "timeseries", "title": "Staged .trn on RESERV",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 7 },
+      "targets": [
+        { "expr": "sqlbackup_staged_trn_count", "legendFormat": "count", "refId": "A" },
+        { "expr": "sqlbackup_staged_trn_bytes / 1073741824", "legendFormat": "GB", "refId": "B" }
+      ]
+    },
+    {
+      "id": 21, "type": "timeseries", "title": "DB state counts",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 7 },
+      "targets": [{
+        "expr": "sum by(state) (sqlbackup_db_state)",
+        "legendFormat": "{{state}}",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 30, "type": "logs", "title": "SqlBackupTools log (Loki)",
+      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [{
+        "expr": "{service_name=\"sqlbackuptools\"}",
+        "refId": "A"
+      }],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

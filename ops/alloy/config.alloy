@@ -1,5 +1,7 @@
-// RESERV-2025 Alloy config. Tails SqlBackupTools Serilog logs and forwards
-// to the prod Amphora OTel endpoint (nginx on 10.0.5.1 → cluster Alloy).
+// RESERV-2025 Alloy config. Tails SqlBackupTools Serilog logs, collects
+// Windows performance counters + a Prometheus textfile directory, and
+// forwards everything to the prod Amphora OTel endpoint (nginx on 10.0.5.1
+// → cluster Alloy → Loki/Mimir/Tempo).
 //
 // Environment-specific values arrive via env vars set by the Windows service
 // wrapper (NSSM AppEnvironmentExtra):
@@ -8,18 +10,19 @@
 //   OTEL_BEARER_TOKEN       bearer for the cloud receiver
 //   DEPLOYMENT_ENVIRONMENT  production
 //
-// Pattern mirrors AmphoraServerConfig/alloy/config.alloy but swaps the OTLP
-// receiver for a file-tail source, and stamps service.name as sqlbackuptools.
+// Pattern mirrors AmphoraServerConfig/alloy/config.alloy but sources come
+// from the local disk (not an OTLP receiver) and service.name is stamped
+// as sqlbackuptools.
 
 logging {
   level  = "info"
   format = "logfmt"
 }
 
-// ---- File tailing ---------------------------------------------------------
-// Serilog writes one file per day into C:\SqlBackupTools\logs\restore-<date>.log.
-// loki.source.file tails every matching file and forwards each line as a
-// Loki-format log record.
+// ==========================================================================
+// LOG pipeline: Serilog files → Loki via OTLP
+// ==========================================================================
+
 local.file_match "sqlbackup_logs" {
   path_targets = [
     { "__path__" = "C:/SqlBackupTools/logs/*.log" },
@@ -31,17 +34,13 @@ loki.source.file "sqlbackup" {
   forward_to = [otelcol.receiver.loki.bridge.receiver]
 }
 
-// Loki-format → OTel bridge so the existing OTel processor chain applies.
 otelcol.receiver.loki "bridge" {
   output {
-    logs = [otelcol.processor.transform.stamp.input]
+    logs = [otelcol.processor.transform.stamp_logs.input]
   }
 }
 
-// ---- Resource stamping ----------------------------------------------------
-// service.name and deployment.environment land as OTLP *resource* attributes
-// so the Loki exporter on the cloud side promotes them to indexed labels.
-otelcol.processor.transform "stamp" {
+otelcol.processor.transform "stamp_logs" {
   log_statements {
     context    = "resource"
     statements = [
@@ -51,11 +50,11 @@ otelcol.processor.transform "stamp" {
   }
 
   output {
-    logs = [otelcol.processor.resourcedetection.default.input]
+    logs = [otelcol.processor.resourcedetection.logs.input]
   }
 }
 
-otelcol.processor.resourcedetection "default" {
+otelcol.processor.resourcedetection "logs" {
   detectors = ["env", "system"]
   system {
     hostname_sources = ["os"]
@@ -66,8 +65,6 @@ otelcol.processor.resourcedetection "default" {
   }
 }
 
-// Hint which resource attributes should become indexed Loki labels. Without
-// this the attributes end up in structured_metadata and label queries fail.
 otelcol.processor.attributes "loki_label_hint" {
   action {
     key    = "loki.resource.labels"
@@ -80,17 +77,69 @@ otelcol.processor.attributes "loki_label_hint" {
   }
 }
 
-// ---- Batch + buffer -------------------------------------------------------
+// ==========================================================================
+// METRIC pipeline: Windows exporter + textfile → Mimir via OTLP
+// ==========================================================================
+//
+// The textfile collector reads *.prom files from C:/SqlBackupTools/metrics/.
+// A side PowerShell script (metrics-collector.ps1) emits SQL-specific
+// metrics there after each restore cycle: per-DB RPO, chain health,
+// last-applied-LSN freshness, etc.
+
+prometheus.exporter.windows "host" {
+  enabled_collectors = [
+    "cpu", "cs", "logical_disk", "memory", "net", "os", "system", "textfile",
+  ]
+  // Alloy 1.6.1 syntax: block is `text_file`, not `textfile`. Newer Alloy
+  // versions use `textfile { directories = [...] }` — adjust on upgrade.
+  text_file {
+    text_file_directory = "C:\\SqlBackupTools\\metrics"
+  }
+}
+
+prometheus.scrape "host" {
+  targets         = prometheus.exporter.windows.host.targets
+  forward_to      = [prometheus.relabel.stamp_metrics.receiver]
+  scrape_interval = "30s"
+}
+
+// Label stamping at scrape time (Prom side), mirrored in the OTel stamp for
+// logs. These land as labels on every series.
+prometheus.relabel "stamp_metrics" {
+  rule {
+    action       = "replace"
+    target_label = "service_name"
+    replacement  = "sqlbackuptools"
+  }
+  rule {
+    action       = "replace"
+    target_label = "deployment_environment"
+    replacement  = sys.env("DEPLOYMENT_ENVIRONMENT")
+  }
+
+  forward_to = [otelcol.receiver.prometheus.bridge.receiver]
+}
+
+otelcol.receiver.prometheus "bridge" {
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+  }
+}
+
+// ==========================================================================
+// Shared batch + cloud exporter
+// ==========================================================================
+
 otelcol.processor.batch "default" {
   timeout         = "5s"
   send_batch_size = 500
 
   output {
-    logs = [otelcol.exporter.otlphttp.cloud.input]
+    logs    = [otelcol.exporter.otlphttp.cloud.input]
+    metrics = [otelcol.exporter.otlphttp.cloud.input]
   }
 }
 
-// ---- Cloud exporter -------------------------------------------------------
 otelcol.auth.bearer "cloud" {
   token = sys.env("OTEL_BEARER_TOKEN")
 }
