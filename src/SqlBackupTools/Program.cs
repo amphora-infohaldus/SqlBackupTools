@@ -35,7 +35,8 @@ namespace SqlBackupTools
                 logger.Error(e, "General failure");
                 return 1;
             }
-            return 0;
+            // Main's int return overrides Environment.ExitCode set by runners — propagate it explicitly.
+            return Environment.ExitCode;
         }
 
         internal static async Task LaunchCommandAsync(this GeneralCommandInfos command, ILogger logger, CancellationToken ct)

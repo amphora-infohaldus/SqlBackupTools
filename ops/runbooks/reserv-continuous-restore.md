@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # RESERV continuous-restore automation
 
 The daemon on RESERV applies LOG backups as they arrive from the primaries.
@@ -111,9 +115,14 @@ Register-ScheduledTask -TaskName 'SqlBackupTools-RestoreCycle' `
 ```
 
 Key choices:
-- **SYSTEM principal** — Integrated auth reaches local SQL as sysadmin, no
-  credential-on-disk problem. The login used for backup restore is already
-  a local sysadmin via the default `BUILTIN\Administrators → sysadmin` path.
+- **SYSTEM principal** — Integrated auth reaches local SQL, no
+  credential-on-disk problem. NOTE: on RESERV the SQL hardening baseline
+  removed the `BUILTIN\Administrators → sysadmin` login, so SYSTEM does
+  NOT inherit sysadmin by default. `RESTORE LOG` requires sysadmin (or
+  dbcreator + db-owner match) and fails with error 3110 without it. We
+  added `NT AUTHORITY\SYSTEM` to sysadmin explicitly:
+  `ALTER SERVER ROLE [sysadmin] ADD MEMBER [NT AUTHORITY\SYSTEM];`
+  Verify with `SELECT IS_SRVROLEMEMBER('sysadmin','NT AUTHORITY\SYSTEM')`.
 - **MultipleInstances IgnoreNew** — if a run overlaps the next trigger
   (e.g. unusually large LOG batch), Windows skips the new instance
   instead of piling up.

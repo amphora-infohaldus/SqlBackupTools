@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Observability stack — state + handoff
 
 Snapshot of what's live for the RESERV continuous-restore pipeline as of
@@ -154,6 +158,49 @@ SYSTEM principal that's `C:\Windows\System32\logs\`. Alloy tailing only
 
 Fix baked into `reserv-restore-cycle.ps1` line 8:
 `New-Item -ItemType Directory -Force -Path $logDir`. Don't remove.
+
+### 7. SYSTEM is NOT sysadmin on RESERV — must be granted explicitly
+
+The original deploy plan assumed SYSTEM inherits sysadmin via the default
+`BUILTIN\Administrators → sysadmin` SQL Server login. RESERV's hardening
+baseline removed `BUILTIN\Administrators` entirely, so SYSTEM has no
+sysadmin path. `RESTORE DATABASE` (FULL/DIFF) works under reduced
+privileges, but `RESTORE LOG` fires SQL error 3110 (`User does not have
+permission to RESTORE database '%s'. RESTORE LOG is terminating
+abnormally.`) because the database owner SID from the source backup
+doesn't exist locally and only sysadmin bypasses that check.
+
+Symptom: every per-DB log apply errors but the wrapper exits 0 (see
+gotcha #8), so the scheduled task reports success while RPO climbs
+indefinitely.
+
+Fix (already applied on RESERV):
+```sql
+ALTER SERVER ROLE [sysadmin] ADD MEMBER [NT AUTHORITY\SYSTEM];
+```
+Verify:
+```sql
+SELECT IS_SRVROLEMEMBER('sysadmin', 'NT AUTHORITY\SYSTEM');  -- expect 1
+```
+If you rebuild the SQL instance or re-apply hardening, re-run this. The
+runbook in `ops/runbooks/reserv-continuous-restore.md` §"Key choices" is
+the canonical reference.
+
+### 8. The exe returns 0 even when the report has Errors (fixed in main)
+
+`Program.cs:Main` previously had `return 0;` unconditionally at the end.
+`RestoreRunner` sets `Environment.ExitCode = 1` when the report has
+`ReportStatus.Error`, but when `Main` returns an int, that return value
+is authoritative and `Environment.ExitCode` is silently overridden.
+
+Result: with gotcha #7 in play, the daemon failed every per-DB log
+apply for 3 days while the wrapper, scheduler, Prom textfile (which
+mirrors `LastTaskResult`), and `--slackOnlyOnError` all reported success.
+
+Fix: `Main` now returns `Environment.ExitCode` after the try/catch. If
+you ever see "exit 0 but logs full of `[ERR] Error restoring`", confirm
+the deployed exe was built from a commit that has this fix
+(`return Environment.ExitCode;` in `src/SqlBackupTools/Program.cs`).
 
 ## Who runs what, end to end
 
