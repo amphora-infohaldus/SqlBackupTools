@@ -1,3 +1,7 @@
+---
+audience: public
+---
+
 # SqlBackupTools
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=SqlBackupTools&metric=alert_status&token=fa520b4aec4ae90222fcbad94b24e2144fcd5641)](https://sonarcloud.io/dashboard?id=SqlBackupTools)

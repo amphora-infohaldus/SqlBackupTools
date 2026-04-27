@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Alloy on RESERV-2025
 
 Grafana Alloy runs as a Windows service on RESERV, tailing the

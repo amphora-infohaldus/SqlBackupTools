@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Getting started — what to do, in order
 
 This is the step-by-step checklist for taking the DR automation from "scaffolding committed" to "production continuous log shipping from primaries to RESERV". Follow top to bottom.

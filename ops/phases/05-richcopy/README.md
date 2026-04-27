@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Phase 05 — RichCopy360 RTA configuration
 
 Configure RichCopy360 on each primary so that the Ola ship folders are

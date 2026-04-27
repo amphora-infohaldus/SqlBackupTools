@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Phase 01 — RESERV-2025 setup
 
 Already done for the default instance during our initial build (collation

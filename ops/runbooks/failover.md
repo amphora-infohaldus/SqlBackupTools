@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Failover runbook (STUB — fill in after Phase 6 cutover and a dry-run)
 
 ## When to invoke

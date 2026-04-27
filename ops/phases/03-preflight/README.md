@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Phase 03 — Preflight: SIMPLE → FULL
 
 Flips all user DBs to FULL recovery, except those matching the exclusion

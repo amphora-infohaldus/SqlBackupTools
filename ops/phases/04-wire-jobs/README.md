@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Phase 04 — Wire SQL Agent jobs
 
 Two scripts, run in order on **each primary**:

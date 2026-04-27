@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Draft: Multi-file DBs silently fail restore
 
 > To file: `gh repo edit amphora-infohaldus/SqlBackupTools --enable-issues` (one-time, needs admin) → then `gh issue create --repo amphora-infohaldus/SqlBackupTools --title "Multi-file DBs silently fail restore: WITH MOVE only emitted for first D/L file" --body-file ops/runbooks/issue-multi-file-restore.md`

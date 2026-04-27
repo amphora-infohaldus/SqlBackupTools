@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Amphora SQL DR Automation
 
 > **New here?** Start with [`GETTING-STARTED.md`](GETTING-STARTED.md) — step-by-step task list, top to bottom.

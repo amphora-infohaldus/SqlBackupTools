@@ -1,3 +1,7 @@
+---
+audience: internal
+---
+
 # Phase 02 — Install Ola Hallengren
 
 Downloads the latest `MaintenanceSolution.sql`, patches the 3 header variables

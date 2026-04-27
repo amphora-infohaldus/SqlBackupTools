@@ -1,12 +1,23 @@
-# Monitoring (day-2 ops)
+---
+audience: internal
+---
 
-**TODO** — populate after Phase 6 cutover is stable.
+# Monitoring
 
-Queries planned:
-- **Backup chain health** per DB: LastFull, LastDiff, LastLog timestamps + gap vs expected cadence
-- **RichCopy lag** — newest file on primary vs newest file on RESERV (same DB/type)
-- **Restore lag** on RESERV — newest file on disk vs last `RESTORE LOG` applied by SqlBackupTools
-- **SqlBackupTools daemon state** — is the restore loop running, any errors
-- **CommandLog error tail** on each primary
+Day-2 observability for the RESERV continuous-restore pipeline is live.
+For the current state — what's deployed, what's pending, the data-flow
+diagram, and the gotchas hit getting there — see
+[`../runbooks/observability-handoff.md`](../runbooks/observability-handoff.md).
 
-Alerting: pushed to Slack via `Amphora.Telemetry` or OTel equivalent — wiring TBD.
+Highlights:
+
+- Metrics: `metrics-collector.ps1` writes a Prometheus textfile every
+  1 min; Alloy on RESERV scrapes + ships to prod OTel.
+- Logs: Serilog on RESERV → Alloy → Loki at `grafana.svc.amphora.ee`.
+- Dashboard JSON committed at [`../dashboards/sqlbackuptools.json`](../dashboards/sqlbackuptools.json) —
+  importable in Grafana UI.
+- Alert rules in `AmphoraKubernetes/workloads/telemetry-prod/configmaps/alert-rules.yaml`
+  (rule group `sqlbackuptools`).
+
+Open items (Alertmanager receivers, dashboard auto-import, Defender exclusion,
+.trn retention) are tracked in the handoff doc's §"Still to do".
