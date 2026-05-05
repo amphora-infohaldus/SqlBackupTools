@@ -109,14 +109,17 @@ persists across restores and SQL restarts):
 2. **Run the restore script:**
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File C:\Sources\SqlBackupTools\ops\runbooks\restore-infohaldus-clone.ps1 -Target baseline
-   powershell -ExecutionPolicy Bypass -File C:\Sources\SqlBackupTools\ops\runbooks\restore-infohaldus-clone.ps1 -Target dev
+   powershell -ExecutionPolicy Bypass -File C:\Sources\SqlBackupTools\ops\runbooks\restore-clone.ps1 -Target baseline
+   powershell -ExecutionPolicy Bypass -File C:\Sources\SqlBackupTools\ops\runbooks\restore-clone.ps1 -Target dev
    ```
 
-   The script picks the newest `.bak` from `C:\BackupSource\` (override
-   with `-BackupPath`), drops the named clone if it exists, and restores
-   `WITH RECOVERY` to `C:\Data\dev\<dbname>.mdf` (override with `-DataDir`).
-   `baseline` is set `READ_ONLY` at the end; `dev` is read-write.
+   The script picks the newest `.bak` whose filename contains the source
+   DB from `C:\BackupSource\` (override with `-BackupPath`), drops the
+   named clone if it exists, and restores `WITH RECOVERY` to
+   `C:\Data\dev\<dbname>.mdf` (override with `-DataDir`). `baseline` is
+   set `READ_ONLY` at the end; `dev` is read-write. Default `-SourceDb`
+   is `amphorafw_infohaldus`; pass `-SourceDb` to clone other tenants —
+   see "Other tenants as READ_ONLY clones" below.
 
 3. **The bot's connection string** (from any local process, no password):
 
@@ -140,6 +143,36 @@ Why this DB is excluded from LOG backups: not yet determined. Run
 `ops/runbooks/why-simple-recovery.sql` against PREMIUM-2022 to investigate
 (Ola CommandLog section is the most likely informative one).
 
+## Other tenants as READ_ONLY clones
+
+Same script supports loading any tenant DB as a single READ_ONLY local
+copy (no `_baseline`/`_dev` pair). Use `-Target readonly` and pass
+`-SourceDb`. The clone is named exactly the same as the source DB.
+
+The source `.bak` for tenants other than `amphorafw_infohaldus` lives
+under `C:\SqlBackup\SQL-2022\<source>\FULL\` on RESERV (most non-PREMIUM
+tenants ship to SQL-2022; check both primaries' folders if unsure).
+
+```bash
+# scp the .bak (size varies — many tenants are 10+ GB)
+scp -O svc_claude_ssh@10.0.0.47:'C:/SqlBackup/SQL-2022/amphorafw_hiiumaavv/FULL/SQL-2022_amphorafw_hiiumaavv_FULL_<yyyymmdd_hhmmss>.bak' /c/BackupSource/
+scp -O svc_claude_ssh@10.0.0.47:'C:/SqlBackup/SQL-2022/amphorafw_haapsalulv/FULL/SQL-2022_amphorafw_haapsalulv_FULL_<yyyymmdd_hhmmss>.bak' /c/BackupSource/
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Sources\SqlBackupTools\ops\runbooks\restore-clone.ps1 -SourceDb amphorafw_hiiumaavv  -Target readonly
+powershell -ExecutionPolicy Bypass -File C:\Sources\SqlBackupTools\ops\runbooks\restore-clone.ps1 -SourceDb amphorafw_haapsalulv -Target readonly
+```
+
+Connection string:
+
+```
+Server=.;Integrated Security=true;Database=amphorafw_hiiumaavv;TrustServerCertificate=true
+```
+
+Cleanup is the same `ALTER DATABASE … SINGLE_USER` → `DROP DATABASE`
+shape as for the dev pair, just against the bare source name.
+
 ## Cleaning up
 
 To drop the clones entirely (e.g. you're done with this dev work):
@@ -160,7 +193,7 @@ need clones it saves you the export/import dance.
 
 ## See also
 
-- `ops/runbooks/restore-infohaldus-clone.ps1` — the script described above.
+- `ops/runbooks/restore-clone.ps1` — the script described above.
 - `ops/runbooks/why-simple-recovery.sql` — diagnostic for the missing
   LOG-backup chain on PREMIUM-2022.
 - `ops/runbooks/reserv-continuous-restore.md` — the daemon-managed copy on

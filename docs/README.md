@@ -20,7 +20,7 @@ deployment, runbooks) lives under `ops/`.
 | Observability stack (Alloy → OTel → Grafana) state and gotchas | [`../ops/runbooks/observability-handoff.md`](../ops/runbooks/observability-handoff.md) |
 | Day-2 monitoring | [`../ops/monitoring/README.md`](../ops/monitoring/README.md) |
 | Failover (stub — fill after first dry-run) | [`../ops/runbooks/failover.md`](../ops/runbooks/failover.md) |
-| Workstation dev-clone of `amphorafw_infohaldus` (finances bot) | [`../ops/runbooks/dev-clone-on-workstation.md`](../ops/runbooks/dev-clone-on-workstation.md) |
+| Workstation local clones of tenant DBs (infohaldus dev pair, others as READ_ONLY) | [`../ops/runbooks/dev-clone-on-workstation.md`](../ops/runbooks/dev-clone-on-workstation.md) |
 | Known-issue draft: multi-file DBs | [`../ops/runbooks/issue-multi-file-restore.md`](../ops/runbooks/issue-multi-file-restore.md) |
 | Grafana dashboard JSON | [`../ops/dashboards/sqlbackuptools.json`](../ops/dashboards/sqlbackuptools.json) |
 

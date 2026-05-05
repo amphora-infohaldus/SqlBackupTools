@@ -1,35 +1,54 @@
-# Restore amphorafw_infohaldus to a development clone (baseline or dev).
+# Restore an Amphora tenant DB as a local clone on a workstation (or RESERV).
 #
-# - baseline: READ_ONLY, comparison reference. Refresh whenever you want a
-#   newer "before" snapshot to diff against.
-# - dev:      read-write, target where the finances bot adds invoices.
+# Three target modes:
+#
+# - baseline: clone named "<source>_baseline", set READ_ONLY. Comparison
+#   reference for dev workflows where you want a "before" snapshot to diff
+#   against.
+# - dev:      clone named "<source>_dev", read-write. The bot under
+#   development inserts/migrates here.
+# - readonly: clone named exactly "<source>", set READ_ONLY. For loading
+#   other tenant DBs locally to read from (no dev counterpart).
 #
 # Re-runnable: drops the named clone if it already exists, then restores
-# from -BackupPath (or the most recent .bak in -BackupRoot).
+# from -BackupPath (or the most recent matching .bak in -BackupRoot).
 #
-# This DB has no LOG backups on the primary (ops/runbooks/why-simple-recovery.sql
-# investigates why), so the clone's freshness is bounded by the latest FULL
-# (Ola FULL job runs daily on the primaries).
+# Source DBs at Amphora are FULL recovery, but Ola's LOG-backup job is
+# excluded for amphorafw_infohaldus (no LOG/ subfolder ships) and may be
+# excluded for others -- clone freshness is bounded by the latest FULL.
 #
-# Usage on RESERV-2025 (backup folder is local):
-#   .\restore-infohaldus-clone.ps1 -Target baseline
+# Usage examples (claude-coder-w11 workstation, .bak files scp'd from RESERV):
 #
-# Usage on a workstation (.bak copied locally):
-#   .\restore-infohaldus-clone.ps1 -Target dev `
-#       -BackupPath C:\BackupSource\PREMIUM-2022_amphorafw_infohaldus_FULL_20260426_041105.bak
+#   # Finances-bot dev pair on amphorafw_infohaldus:
+#   .\restore-clone.ps1 -Target baseline
+#   .\restore-clone.ps1 -Target dev
+#
+#   # Other tenants as plain READ_ONLY:
+#   .\restore-clone.ps1 -SourceDb amphorafw_hiiumaavv  -Target readonly
+#   .\restore-clone.ps1 -SourceDb amphorafw_haapsalulv -Target readonly
+#
+#   # Explicit .bak path:
+#   .\restore-clone.ps1 -SourceDb amphorafw_hiiumaavv -Target readonly `
+#       -BackupPath C:\BackupSource\SQL-2022_amphorafw_hiiumaavv_FULL_20260503_022759.bak
 
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('baseline', 'dev')]
+    [ValidateSet('baseline', 'dev', 'readonly')]
     [string]$Target,
 
-    # Explicit .bak file. If omitted, the script picks the newest .bak in $BackupRoot.
+    # Source database name (e.g. amphorafw_infohaldus, amphorafw_hiiumaavv).
+    # When -BackupPath is omitted, the auto-pick scans -BackupRoot for the
+    # newest .bak whose filename contains this string.
+    [string]$SourceDb = 'amphorafw_infohaldus',
+
+    # Explicit .bak file. If omitted, the script picks the newest
+    # .bak in $BackupRoot whose name contains $SourceDb.
     [string]$BackupPath,
 
     # Folder scanned when -BackupPath isn't given. Default matches the
     # claude-coder-w11 workstation layout where .bak files are scp'd to
     # C:\BackupSource\ from RESERV-2025. On RESERV itself, pass
-    # -BackupRoot C:\SqlBackup\PREMIUM-2022\amphorafw_infohaldus\FULL.
+    # -BackupRoot C:\SqlBackup\<primary>\<source>\FULL.
     [string]$BackupRoot = 'C:\BackupSource',
 
     # Where the restored .mdf/.ldf land. Created if missing.
@@ -41,21 +60,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$source    = 'amphorafw_infohaldus'
-$cloneName = "${source}_${Target}"
+$source = $SourceDb
+$cloneName = if ($Target -eq 'readonly') { $source } else { "${source}_${Target}" }
+$setReadOnly = ($Target -eq 'baseline' -or $Target -eq 'readonly')
 
 if ($BackupPath) {
     $latestBak = Get-Item -Path $BackupPath
 } else {
-    $latestBak = Get-ChildItem -Path $BackupRoot -Filter '*.bak' -File |
+    $latestBak = Get-ChildItem -Path $BackupRoot -Filter "*$source*.bak" -File |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
     if (-not $latestBak) {
-        throw "No .bak files found in $BackupRoot"
+        throw "No .bak files matching '*$source*.bak' found in $BackupRoot"
     }
 }
 
 Write-Host "Server        : $ServerInstance"
+Write-Host "Source DB     : $source"
 Write-Host "Source backup : $($latestBak.FullName)"
 Write-Host "                $([math]::Round($latestBak.Length/1MB,1)) MB, taken $($latestBak.LastWriteTime)"
 Write-Host "Target DB     : $cloneName ($Target)"
@@ -114,7 +135,7 @@ RESTORE DATABASE [$cloneName]
          STATS = 5;
 "@
 
-if ($Target -eq 'baseline') {
+if ($setReadOnly) {
     $sql += @"
 
 PRINT 'Setting [$cloneName] READ_ONLY';
