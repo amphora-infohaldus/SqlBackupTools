@@ -18,6 +18,11 @@ Highlights:
   importable in Grafana UI.
 - Alert rules in `AmphoraKubernetes/workloads/telemetry-prod/configmaps/alert-rules.yaml`
   (rule group `sqlbackuptools`).
+- Daily email digest: `ops/runbooks/dr-digest.ps1` (Scheduled Task
+  `SqlBackupTools-DRDigest`, fires 08:00 local). Sends an HTML health
+  summary — task status, DB inventory, RPO outliers, recent restores,
+  disk free — via the LinxTelecom relay. Interim mailbox-side visibility
+  until real Alertmanager receivers are wired (see `observability-handoff.md`).
 
 Open items (Alertmanager receivers, dashboard auto-import, Defender exclusion,
 .trn retention) are tracked in the handoff doc's §"Still to do".

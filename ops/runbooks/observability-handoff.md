@@ -22,12 +22,13 @@ re-discover them.
 | Alloy service | `GrafanaAlloy` via NSSM | Tails logs + scrapes Windows + textfile → prod OTel |
 | Alloy install | `C:\Tools\alloy\` | Binary, config, secrets |
 
-**Two Scheduled Tasks, both SYSTEM principal:**
+**Three Scheduled Tasks, all SYSTEM principal:**
 
 | Task | Cadence | Script |
 |---|---|---|
 | `SqlBackupTools-RestoreCycle` | every 5 min | `reserv-restore-cycle.ps1` |
 | `SqlBackupTools-MetricsCollector` | every 1 min | `metrics-collector.ps1` |
+| `SqlBackupTools-DRDigest` | daily 08:00 | `dr-digest.ps1` |
 
 **In the cluster (prod):**
 
@@ -61,7 +62,7 @@ In Grafana (once datasource UIDs match the import):
 ## Still to do (easy wins, not urgent)
 
 1. **Restart Prometheus pod** to pick up the new rules (see gotcha #1 for the exact how). Until done, alerts don't fire.
-2. **Wire real Alertmanager receivers** (Slack webhook, optionally email via Mailgun). Current config routes everything to `localhost:9093/-/healthy` — a no-op.
+2. **Wire real Alertmanager receivers** (Slack webhook, optionally email via Mailgun). Current config routes everything to `localhost:9093/-/healthy` — a no-op. Interim mitigation: `SqlBackupTools-DRDigest` task emails a daily health summary to the operator via the LinxTelecom relay (`mail.datanet.ee:25`, no auth) — covers green-path confidence and same-day visibility on outliers; doesn't replace real on-fire alerting.
 3. **Import the dashboard JSON** manually in Grafana UI. Datasource UIDs in the JSON assume `"loki"` + default Mimir/Prometheus — adjust at import time.
 4. **Windows Defender exclusion** for `C:\SqlBackup\*` on RESERV (AV lock on mid-ship `.trn` files is a failure mode in the catalogue, not yet fixed).
 5. **.trn retention task** on RESERV. At ~125 GB/day ingest and 6.3 TB free, runway is ~50 days — so not urgent, but worth a scheduled `Remove-Item` task at a 7-day retention window.
@@ -256,6 +257,8 @@ the deployed exe was built from a commit that has this fix
 - `ops/runbooks/register-restore-task.ps1` — registers the 5-min task
 - `ops/runbooks/metrics-collector.ps1` — textfile emitter
 - `ops/runbooks/register-metrics-task.ps1` — registers the 1-min task
+- `ops/runbooks/dr-digest.ps1` — daily DR-health email digest (08:00 task)
+- `ops/runbooks/analyze-db.sql` — ad-hoc per-table sizing + first/last-row dating
 - `ops/runbooks/reserv-continuous-restore.md` — the original deploy plan (pre-execution)
 - `ops/dashboards/sqlbackuptools.json` — Grafana dashboard (importable)
 - In AmphoraKubernetes: `workloads/telemetry-prod/configmaps/alert-rules.yaml` — rule group `sqlbackuptools`

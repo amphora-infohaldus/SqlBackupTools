@@ -18,6 +18,30 @@ copy of `amphorafw_infohaldus` is a different thing — it's the warm-standby
 replica kept in `RESTORING` state by the continuous-restore daemon
 (`ops/runbooks/reserv-continuous-restore.md`). Don't confuse them.
 
+## Scratch write-target DB: `AmphoraBackend` (local)
+
+Bots (finance-bot and friends) need a place to write their nightly report
+output. The workstation hosts a **local empty** `AmphoraBackend` for that —
+created via SSMS "Script Database As CREATE", matches the production schema
+options (so SP creation/etc. behaves the same), but **no production data**.
+
+- File: `C:\Data\dev\AmphoraBackend.mdf`
+- Recovery model: `SIMPLE` (bot output is transient; no point-in-time recovery,
+  no log backups needed)
+- Settings inherited from production: `ANSI_NULLS OFF`, `QUOTED_IDENTIFIER OFF`,
+  `PARAMETERIZATION SIMPLE`. Most ORMs override these per connection; if you
+  hand-write SPs here, run `ALTER DATABASE [AmphoraBackend] SET QUOTED_IDENTIFIER ON;
+  SET ANSI_NULLS ON;` before `CREATE PROCEDURE` to avoid quoting weirdness.
+- Query Store is **on** (1 GB cap, 90-day retention, 30-min intervals) — gives
+  you query telemetry for the bots' workload out of the box.
+
+**Naming collision warning.** A production `AmphoraBackend` also exists on
+SQL-2022's second instance (email-event logging + temporary data, ~250 GB).
+Same name, completely different roles. Always be explicit in connection
+strings — `Server=.;Database=AmphoraBackend` on the workstation hits the
+local scratch copy; `Server=SQL-2022,<second-instance-port>;Database=AmphoraBackend`
+hits prod.
+
 ## Prerequisites
 
 - SQL Server installed locally (default instance, integrated auth as a
