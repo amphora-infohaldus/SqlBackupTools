@@ -35,11 +35,11 @@ we know the install media path.
 - Default instance: ready (collation matches, cert installed, claude present, TCP open)
 - `\PREMIUM` instance: not yet installed. Blocks restoration of PREMIUM-2022's `amphora_logs_13`, `AmphoraFT_*`, etc. to their own namespace.
 
-Decision deferred per user conversation — since we're using RichCopy (not SMB
-push) and amphora_logs is excluded from ship, the only name collision between
-primaries is resolved by excluding it. Other DBs don't collide. Whether the
-second instance is still needed depends on whether any *other* name collision
-appears in the future.
+Decision deferred per user conversation — the only name collision between
+primaries (`amphora_logs`) is handled by repo-intent exclusion (currently
+shipped from PREMIUM-2022 in practice; see drift note in `config/shared.ps1`).
+Other DBs don't collide. Whether the second instance is still needed depends
+on whether any *other* name collision appears in the future.
 
 **Recommendation:** defer the second-instance install until:
 - Phase 06 cutover is proven and stable

@@ -4,19 +4,26 @@ audience: internal
 
 # RESERV continuous-restore automation
 
-The daemon on RESERV applies LOG backups as they arrive from the primaries.
-Today it's a one-shot invocation; tomorrow it's a Windows Scheduled Task.
+> **STATUS: HISTORICAL.** This was the original pre-execution deployment plan.
+> All items here have been built and the daemon is running. For current state
+> (what's deployed, how it's wired, gotchas), see
+> [`observability-handoff.md`](observability-handoff.md). This doc remains as
+> the design narrative — useful if rebuilding from scratch.
 
-## Current state (as of 2026-04-22 18:53)
+The daemon on RESERV applies LOG backups as they arrive from the primaries.
+Today it's a Windows Scheduled Task firing every 5 min.
+
+## Snapshot (frozen 2026-04-22, kept for narrative continuity)
 
 - `C:\SqlBackupTools\SqlBackupTools.exe` — pre-security-hardening build.
   Rebuild from main (commits `daeab1b`, `e10f1c6`, `0d4352d`) to pick up
   the multi-file fix, identifier validation, TLS-by-default, Mailgun, and
   `--secrets-file` support.
 - 151 DBs in RESTORING with their first LOG applied. `amphora_logs`
-  excluded per policy.
-- LOG-backup cadence on primaries: 30 min (`LogIntervalMinutes` in
-  `ops/config/shared.ps1`).
+  excluded per policy. (Now 152 — `amphorafw_infohaldus` joined the
+  continuous-restore set on 2026-05-11 after its legacy LS was decommissioned.)
+- LOG-backup cadence on primaries: 30 min at time of writing. **Currently 15 min** —
+  see `ops/config/shared.ps1`.
 
 ## One-shot invocation that worked today
 
@@ -94,9 +101,9 @@ $common = @(
 
 ### 4. Scheduled Task
 
-Cadence: every 5 minutes (tighter than the 30-min LOG cadence, so every
-LOG batch is picked up on the next tick — worst-case add-on latency ~5
-min on top of the primary's 30-min cycle).
+Cadence: every 5 minutes (tighter than the LOG cadence on the primaries —
+currently 15 min — so every LOG batch is picked up on the next tick;
+worst-case add-on latency ~5 min on top of the primary's LOG cycle).
 
 ```powershell
 $action = New-ScheduledTaskAction `
@@ -141,8 +148,8 @@ After scheduled task is live:
 
 ### Open items (deferred)
 
-- Tighten `LogIntervalMinutes` once a week of steady-state data is in
-  (target 5 min first, then 1).
+- Tighten `LogIntervalMinutes` further (currently 15; target 5 first, then 1
+  after re-measuring LOG-job duration headroom).
 - Weekly `DBCC CHECKDB` on a rotation — either via `--checkDb` on a
   separate scheduled task (once/week), or let Ola handle integrity on the
   primaries and skip on RESERV.

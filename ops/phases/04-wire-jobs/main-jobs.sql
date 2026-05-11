@@ -21,7 +21,7 @@
 --   DailyDiffTime        — HHMMSS int
 --   MonthlyFullTime      — HHMMSS int
 --   YearlyFullTime       — HHMMSS int
---   LogIntervalMinutes   — integer; 30 initially, tighten later
+--   LogIntervalMinutes   — integer; currently 15 (was 30 at first rollout)
 --   ShipLocalPath        — e.g. 'W:\SqlBackup\ship' or 'D:\SqlBackup\ship'
 --   MonthlyLocalPath     — local monthly root
 --   YearlyLocalPath      — local yearly root
@@ -101,7 +101,7 @@ EXEC msdb.dbo.sp_add_schedule @schedule_name = N'Sched_Yearly_Full',
 PRINT '1. Schedules created.';
 
 -- ==========================================================================
--- 2. Weekly FULL — ships to local, RichCopy picks up
+-- 2. Weekly FULL — writes to @ShipLocalPath (direct UNC to RESERV on PREMIUM-2022)
 -- ==========================================================================
 SET @cmd = N'EXECUTE [dbo].[DatabaseBackup] '
  + N'@Databases = ''' + @ExcludeListShip + N''', '
@@ -176,7 +176,7 @@ EXEC msdb.dbo.sp_update_job
 PRINT '4. LOG job wired (DISABLED — phase 06 enables).';
 
 -- ==========================================================================
--- 5. MONTHLY FULL — local, 30 day retention, for 1-year offsite via RichCopy
+-- 5. MONTHLY FULL — local on primary, 30 day retention, picked up by offsite RichCopy job for 1-year obligation
 -- ==========================================================================
 IF EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'DatabaseBackup - USER_DATABASES - FULL - MONTHLY')
     EXEC msdb.dbo.sp_delete_job @job_name = N'DatabaseBackup - USER_DATABASES - FULL - MONTHLY';

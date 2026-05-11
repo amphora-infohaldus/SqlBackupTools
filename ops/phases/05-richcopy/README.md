@@ -4,6 +4,12 @@ audience: internal
 
 # Phase 05 — RichCopy360 RTA configuration
 
+> **STATUS: NOT DEPLOYED — alternative transport, kept as reference.**
+> Current setup: Ola's FULL/DIFF/LOG jobs write directly to `\\10.0.0.47\SqlBackup`
+> (RESERV's SMB share) — no RichCopy hop. See `ops/README.md` "Current transport".
+> The doc below describes the originally-planned local-ship + RichCopy-mirror
+> architecture, useful if you ever need to fall back from direct UNC.
+
 Configure RichCopy360 on each primary so that the Ola ship folders are
 mirrored to RESERV-2025 in real time. No SQL to run in this phase — it's
 all configured in the RichCopy UI on each primary (or via its config files,

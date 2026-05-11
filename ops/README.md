@@ -8,6 +8,10 @@ audience: internal
 
 This folder holds all operational scripts for the continuous log-shipping / DR pipeline from **SQL-2022** and **PREMIUM-2022** to **RESERV-2025**. It lives inside the `amphora-infohaldus/SqlBackupTools` repo (a fork of Lucca's tool, which we use for the continuous-restore daemon on RESERV).
 
+## Current transport
+
+Ola's FULL/DIFF/LOG jobs on each primary write **directly** to RESERV's SMB share (`\\10.0.0.47\SqlBackup`). The RichCopy360 RTA hop that was originally planned was skipped — direct UNC was simpler to bring up. The RichCopy phase doc (`phases/05-richcopy/`) is preserved as an alternative transport but is not what's running today.
+
 > **The `.NET` source tree in `src/` is upstream Lucca's tool — do not touch it here.** Everything Amphora-specific lives under `ops/`.
 
 ## Layout
@@ -72,7 +76,7 @@ git pull
 | 02 | `phases/02-ola-install/` | Once per primary | SQL-2022, PREMIUM-2022 |
 | 03 | `phases/03-preflight/` | Once per primary before Phase 4 | SQL-2022, PREMIUM-2022 |
 | 04 | `phases/04-wire-jobs/` | Once per primary (re-run OK, idempotent) | SQL-2022, PREMIUM-2022 |
-| 05 | `phases/05-richcopy/` | Once — configure RichCopy360 RTA jobs | SQL-2022, PREMIUM-2022 |
+| 05 | `phases/05-richcopy/` | **Skipped** — direct-UNC used instead. Kept as alternative-transport reference. | — |
 | 06 | `phases/06-cutover/` | Kick off initial FULL, then enable LOG job | SQL-2022, PREMIUM-2022 |
 
 ## Credential handling

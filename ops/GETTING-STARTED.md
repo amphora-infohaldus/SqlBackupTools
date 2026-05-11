@@ -4,6 +4,16 @@ audience: internal
 
 # Getting started — what to do, in order
 
+> **STATUS: PARTIALLY STALE / HISTORICAL.** Bootstrap and cutover already done
+> on both primaries + RESERV. The DR pipeline is live. This doc remains as the
+> as-built sequence for: (a) rebuilding from scratch, (b) understanding the
+> order of decisions, (c) post-cutover maintenance (rotating cadence, adding
+> exclusions, password rotation). For current state see `ops/runbooks/observability-handoff.md`.
+>
+> Notable divergence from this doc's original plan: Phase 5 (RichCopy360 RTA)
+> was NOT deployed — Ola writes directly to RESERV's UNC share. The "this week"
+> migration block below describes the intent at the time, not what happened.
+
 This is the step-by-step checklist for taking the DR automation from "scaffolding committed" to "production continuous log shipping from primaries to RESERV". Follow top to bottom.
 
 If anything in this document doesn't match reality any more, update this document as part of the fix — it's the operator's source of truth.
@@ -58,7 +68,7 @@ After this block, bootstrap is done. Repo pulls give each server what it needs; 
 
 The PREMIUM-2022 initial FULL kicked off against `\\10.0.0.47\SqlBackup\` (SMB direct push) and is progressing. It will keep running and land ~25 files on the RESERV share. Let it finish or cancel — either is fine, this work supersedes it.
 
-### When you're ready to migrate to the new (RichCopy-based) pipeline
+### When you're ready to migrate to the new pipeline (originally RichCopy-based; landed as direct-UNC — see status header)
 
 Pick a quiet time. One primary at a time (PREMIUM-2022 first so SQL-2022 keeps serving its bigger load).
 
@@ -80,10 +90,7 @@ On **PREMIUM-2022** (elevated PowerShell, as sysadmin-equivalent):
   .\ops\run.ps1 phases\04-wire-jobs\main-jobs.sql
   .\ops\run.ps1 phases\04-wire-jobs\amphora-logs-local-jobs.sql
   ```
-- [ ] **Phase 5 — RichCopy RTA job** for the new ship folder:
-  - Open RichCopy360 GUI on PREMIUM-2022.
-  - Add source `D:\SqlBackup\ship\`, destination `C:\SqlBackup\` on RESERV-2025, RTA mode, preserve structure, no-delete-on-source-removal.
-  - See `ops/phases/05-richcopy/README.md` for full parameter list.
+- [ ] ~~**Phase 5 — RichCopy RTA job**~~ **SKIPPED.** Direct-UNC was used instead — `ShipLocalPath` on PREMIUM-2022 is set to `\\10.0.0.47\SqlBackup`. See `ops/phases/05-richcopy/README.md` only if you need to fall back to local-ship + RichCopy-mirror.
 - [ ] **Phase 6 — Cutover** (kick off fresh initial FULL into the new pipeline):
   ```powershell
   .\ops\run.ps1 phases\06-cutover\kickoff-initial-full.sql
@@ -96,18 +103,24 @@ On **PREMIUM-2022** (elevated PowerShell, as sysadmin-equivalent):
   ```
 - [ ] Disable the old `MaintenancePlan.FULL backup` job on PREMIUM-2022.
 - [ ] Retire the old RichCopy job that was shipping flat `D:\SqlBackup\DAILY\` to RESERV (once 30 days pass or you manually delete the old archive).
+- [ ] Tear down any per-DB legacy SQL native log shipping (e.g. `amphorafw_infohaldus` → SQL-2022 `\LogShipping`, decommissioned 2026-05-11). Check for `LSBackup_*` jobs + rows in `msdb.dbo.log_shipping_primary_databases`.
 
 Repeat Phase 2-6 on **SQL-2022**, plus identify and disable the external orchestrator that was writing to `W:\DAILY\`.
 
 ---
 
-## After 1 week of running at 30-min LOG cadence
+## Tightening LOG cadence (post-cutover)
 
-Once confident the pipeline holds up:
+Currently at 15 min on both primaries (LOG-job sweep durations measured:
+PREMIUM-2022 ~5-12 s for 26 DBs; SQL-2022 ~40-55 s for 130 DBs — plenty of
+headroom). To tighten further (5 → 1):
 
-- [ ] Measure actual RichCopy lag + SqlBackupTools apply time per LOG.
-- [ ] If comfortably under target, reduce `LogIntervalMinutes` in `ops/config/shared.ps1`:
-  - 30 -> 15 -> 5 -> 1. Commit, pull on each primary, re-run `phases\04-wire-jobs\main-jobs.sql`.
+- [ ] Re-measure LOG-job duration (`msdb.dbo.sysjobhistory` for the LOG job,
+      step_id 0).
+- [ ] If still comfortably under half the new interval, reduce `LogIntervalMinutes`
+      in `ops/config/shared.ps1`. Commit, pull on each primary, re-run
+      `phases\04-wire-jobs\main-jobs.sql` — or one-shot with
+      `sp_update_schedule @name=N'Sched_Minutely_Log', @freq_subday_interval=<N>`.
 - [ ] Document steady-state RPO in `ops/monitoring/README.md`.
 
 ---
@@ -146,7 +159,7 @@ Edit `ExcludeListShip` (and `ExcludeListLocal` if needed) in `ops/config/shared.
 ## What's intentionally not done yet
 
 - `\PREMIUM` named instance on RESERV (only needed if a second name collision appears)
-- `Ülemus`-shared-credential service-account refactor (deferred per option B — less urgent now that RichCopy owns cross-machine transport)
+- `Ülemus`-shared-credential service-account refactor (deferred per option B — direct-UNC writes from the primary's Ola job step run as the SQL Server service account, so it needs share-write access on RESERV; current setup relies on the existing Ülemus identity)
 - Empty `amphora_logs` placeholder + Alloy forwarding job on RESERV (see `memory/project_amphora_logs_placeholder.md`)
 - Monitoring dashboards / alerting queries (`ops/monitoring/`)
 - Failback runbook after primary rebuild

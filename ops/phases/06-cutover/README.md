@@ -4,8 +4,14 @@ audience: internal
 
 # Phase 06 — Cutover
 
-Take the initial FULL on each primary, let RichCopy ship to RESERV, seed
-RESERV, then enable the minute-LOG job.
+> **STATUS: HISTORICAL.** Cutover has already happened on both primaries; this
+> doc remains as the as-built reference for the sequence. Current state lives
+> in `ops/runbooks/observability-handoff.md` (what's running) and `ops/README.md`
+> (transport). Anything below described as "future" or "after one week" is
+> already done.
+
+Take the initial FULL on each primary, ship to RESERV (direct UNC in current
+deployment), seed RESERV, then enable the LOG job.
 
 ## Sequence
 
@@ -22,6 +28,11 @@ EXEC msdb.dbo.sp_update_job @job_name = N'MaintenancePlan.FULL backup', @enabled
 
 **SQL-2022** — find and disable whatever drives `W:\DAILY\` backups today
 (external orchestrator, not a SQL Agent job). Task Scheduler? PowerShell on another box?
+
+**PREMIUM-2022** — also tear down any legacy SQL native log-shipping setups
+(e.g. the one that shipped `amphorafw_infohaldus` to SQL-2022's `\LogShipping`
+share, decommissioned 2026-05-11). Look for `LSBackup_*` SQL Agent jobs +
+entries in `msdb.dbo.log_shipping_primary_databases`. `sp_delete_log_shipping_primary_database` removes them.
 
 ### 2. Kick off initial FULL on each primary
 
@@ -83,16 +94,24 @@ cd C:\Sources\SqlBackupTools
 .\ops\run.ps1 phases\06-cutover\enable-log-job.sql
 ```
 
-From this point, LOG backups run every 30 min (initial conservative cadence —
-reduce after a week of observation). RichCopy ships them. SqlBackupTools
-continuously applies them to RESERV. RPO target: ≤30 min initially.
+From this point, LOG backups run on the configured `LogIntervalMinutes`
+cadence (currently 15 min — see `ops/config/shared.ps1`). Ola writes them
+straight to RESERV's UNC share. SqlBackupTools sweeps every 5 min and applies
+new LOGs. RPO target: ≤15 min.
 
-### 7. Tighten LOG cadence after observing
+### 7. Tighten LOG cadence further (optional)
 
-After one week:
-- Look at actual RichCopy lag + SqlBackupTools apply time
-- If comfortably under target → reduce `LogIntervalMinutes` in
-  `ops/config/shared.ps1`:
-  - 30 → 15 → 5 → 1
-- Re-run `ops/run.ps1 phases/04-wire-jobs/main-jobs.sql` on each primary
-  (idempotent — only schedule changes)
+Measure LOG-job duration on each primary (`msdb.dbo.sysjobhistory` for
+`DatabaseBackup - USER_DATABASES - LOG`, `step_id = 0`). If durations are
+well under half the interval, the cadence can be tightened (15 → 5 → 1).
+Edit `LogIntervalMinutes` in `ops/config/shared.ps1`, commit, pull, re-run
+`ops/run.ps1 phases/04-wire-jobs/main-jobs.sql` on each primary (idempotent —
+only schedule changes). Or for a one-off in-place flip without re-running
+the whole script:
+
+```sql
+USE msdb;
+EXEC sp_update_schedule
+     @name = N'Sched_Minutely_Log',
+     @freq_subday_interval = <new minutes>;
+```

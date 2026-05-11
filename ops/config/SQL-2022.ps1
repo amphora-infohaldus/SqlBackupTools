@@ -16,7 +16,11 @@
     # Weekly FULL starts at 02:00 Sunday
     WeeklyFullTime        = 20000
 
-    # Local backup paths (Ola writes here; RichCopy360 RTA ships to RESERV)
+    # FULL/DIFF/LOG @Directory for Ola jobs. NOTE: the deployed value here has
+    # NOT been verified against the live job step. PREMIUM-2022 was confirmed
+    # to write direct-UNC (\\10.0.0.47\SqlBackup) -- SQL-2022 likely the same,
+    # but check the live `DatabaseBackup - USER_DATABASES - FULL` job step
+    # before re-running phases/04-wire-jobs/main-jobs.sql here.
     ShipLocalPath         = 'W:\SqlBackup\ship'
     MonthlyLocalPath      = 'W:\SqlBackup\MONTHLY'
     YearlyLocalPath       = 'W:\SqlBackup\YEARLY'

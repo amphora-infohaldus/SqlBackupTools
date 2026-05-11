@@ -6,7 +6,7 @@ audience: internal
 
 Two scripts, run in order on **each primary**:
 
-1. `main-jobs.sql` — 5 main jobs: Weekly FULL, Daily DIFF, LOG (disabled), MONTHLY, YEARLY. All backups write to LOCAL disk (`ShipLocalPath`, `MonthlyLocalPath`, `YearlyLocalPath` from per-server config); RichCopy360 RTA then mirrors to RESERV.
+1. `main-jobs.sql` — 5 main jobs: Weekly FULL, Daily DIFF, LOG (disabled), MONTHLY, YEARLY. FULL/DIFF/LOG write to `ShipLocalPath` from per-server config — on PREMIUM-2022 that's the UNC share on RESERV (`\\10.0.0.47\SqlBackup`), so jobs ship directly. MONTHLY/YEARLY stay local (`MonthlyLocalPath`, `YearlyLocalPath`).
 
 2. `amphora-logs-local-jobs.sql` — the `amphora_logs` carve-out: reverts to SIMPLE recovery + creates dedicated local-only weekly FULL + daily DIFF. `amphora_logs` is excluded from the main ship stream (name collides between SQL-2022 and PREMIUM-2022) but still gets local retention.
 
@@ -18,7 +18,7 @@ cd C:\Sources\SqlBackupTools
 .\ops\run.ps1 phases\04-wire-jobs\amphora-logs-local-jobs.sql
 ```
 
-Both idempotent — re-run safely after config changes (e.g., when tightening LOG cadence from 30 min → 15 min).
+Both idempotent — re-run safely after config changes. Current `LogIntervalMinutes` is 15 (see `ops/config/shared.ps1`).
 
 ## What gets created
 

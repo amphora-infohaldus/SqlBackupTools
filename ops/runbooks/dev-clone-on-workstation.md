@@ -129,19 +129,16 @@ persists across restores and SQL restarts):
 
    Same shape for `amphorafw_infohaldus_baseline` (READ_ONLY).
 
-## Source recovery model is `FULL`, but no LOG chain ships
+## Clone freshness is bounded by the most recent FULL
 
-The clones come up in `FULL` recovery model — the source on PREMIUM-2022
-*is* in FULL, contrary to the working assumption that the SIMPLE-recovery
-cohort included this DB. But the backup folder
-`C:\SqlBackup\PREMIUM-2022\amphorafw_infohaldus\` has no `LOG/` subfolder,
-meaning Ola's LOG-backup job is excluding this DB for some reason. RPO at
-restore time is therefore bounded by the most recent FULL — typically the
-overnight 04:11 run, so `~now − last 04:11`.
-
-Why this DB is excluded from LOG backups: not yet determined. Run
-`ops/runbooks/why-simple-recovery.sql` against PREMIUM-2022 to investigate
-(Ola CommandLog section is the most likely informative one).
+The source on PREMIUM-2022 is in FULL recovery and ships LOG backups at
+the configured cadence (see `ops/config/shared.ps1` `LogIntervalMinutes`),
+so RESERV stays continuously current. But `restore-clone.ps1` itself only
+restores the most recent FULL with RECOVERY — it does not chain DIFF or
+LOG — so the workstation clone is as fresh as the last FULL, typically
+the overnight 04:11 run on PREMIUM-2022. If you need a fresher clone,
+copy the latest DIFF too and restore manually with `NORECOVERY` on the
+FULL + `RECOVERY` on the DIFF.
 
 ## Other tenants as READ_ONLY clones
 

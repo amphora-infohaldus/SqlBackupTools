@@ -5,7 +5,7 @@ audience: internal
 # Observability stack — state + handoff
 
 Snapshot of what's live for the RESERV continuous-restore pipeline as of
-2026-04-23, plus the gotchas hit getting there so the next operator doesn't
+2026-05-11, plus the gotchas hit getting there so the next operator doesn't
 re-discover them.
 
 ## What's live
@@ -207,11 +207,12 @@ the deployed exe was built from a commit that has this fix
 ```
   ┌──────────────────────────┐       ┌──────────────────────────┐
   │ SQL-2022 primary         │       │ PREMIUM-2022 primary     │
-  │ Ola LOG job @ 30m        │       │ Ola LOG job @ 30m        │
+  │ Ola LOG job @ 15m        │       │ Ola LOG job @ 15m        │
   └──────────┬───────────────┘       └──────────┬───────────────┘
-             │ ship folder                      │ ship folder
-             ▼                                  ▼
-             └──────────── RichCopy RTA ────────┘
+             │                                  │
+             │ BACKUP DATABASE/LOG TO DISK = '\\10.0.0.47\SqlBackup\...'
+             │                                  │
+             └─────────────── direct UNC ───────┘
                              │
                              ▼
   ┌────────────────────────────────────────────────────────────┐

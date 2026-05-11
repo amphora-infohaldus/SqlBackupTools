@@ -13,9 +13,11 @@
 # Re-runnable: drops the named clone if it already exists, then restores
 # from -BackupPath (or the most recent matching .bak in -BackupRoot).
 #
-# Source DBs at Amphora are FULL recovery, but Ola's LOG-backup job is
-# excluded for amphorafw_infohaldus (no LOG/ subfolder ships) and may be
-# excluded for others -- clone freshness is bounded by the latest FULL.
+# Source DBs at Amphora are FULL recovery and ship LOG backups at the
+# configured cadence (see ops/config/shared.ps1 LogIntervalMinutes).
+# This script only restores the latest FULL with RECOVERY -- it does not
+# chain DIFF/LOG -- so clone freshness is bounded by the latest FULL,
+# regardless of whether LOGs are shipping.
 #
 # Usage examples (claude-coder-w11 workstation, .bak files scp'd from RESERV):
 #

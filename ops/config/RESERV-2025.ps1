@@ -1,6 +1,8 @@
 # RESERV-2025 (10.0.0.47) -- Warm standby. No backups originate here; this
-# server runs SqlBackupTools (continuous-restore daemon) against the local
-# folders that RichCopy360 RTA populates from the primaries.
+# server runs SqlBackupTools (continuous-restore daemon) against local
+# folders that the primaries write to directly via UNC (\\10.0.0.47\SqlBackup
+# = C:\SqlBackup). The planned RichCopy360 RTA hop was skipped -- direct UNC
+# is what's deployed.
 
 @{
     ServerShortName          = 'RESERV-2025'
@@ -9,7 +11,8 @@
     # Cert was restored from backup; name matches primaries' intended standard.
     ServerCert               = 'SqlBackupCert'
 
-    # Where RichCopy360 RTA lands files shipped from primaries
+    # Where primaries write their .bak/.trn via direct UNC
+    # (\\10.0.0.47\SqlBackup -> this path on RESERV)
     ReceivedRoot             = 'C:\SqlBackup'
 
     # Legacy archive (pre-Ola flat-format backups). Leave in place until old
