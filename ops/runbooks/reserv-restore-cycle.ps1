@@ -19,7 +19,13 @@ $commonArgs = @(
     'restore',
     '-h', '.',
     '--continueLogs',
-    '--ignoreDatabases', 'amphora_logs',
+    # amphora_logs       -- excluded from ship by design; only shipped from PREMIUM-2022
+    #                       and we never apply it on RESERV (separate local jobs handle it).
+    # amphora_logs_13    -- known stale since 2026-04-21; ship from PREMIUM-2022 hits a name
+    #                       collision / chain-break we haven't unwound. Skipped to keep the
+    #                       daemon from re-trying every cycle. Drop the local DB on RESERV
+    #                       once we're sure we don't need the 20-day-old snapshot.
+    '--ignoreDatabases', 'amphora_logs', 'amphora_logs_13',
     '--logs', 'C:\SqlBackupTools\logs'
 )
 
