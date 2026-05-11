@@ -40,3 +40,13 @@ audience: internal
 - TDE / encrypted DBs: none in current fleet (confirmed by edition audit).
 - SQL Agent jobs on RESERV are not the same as on primaries — any required
   jobs (not in our Ola set) must be recreated manually.
+- **`AmphoraBackend`** (on SQL-2022's second instance) is NOT in the DR
+  pipeline. If SQL-2022 is lost, this DB and everything in it (email-event
+  telemetry, file blobs, etc.) is unrecoverable from RESERV. See
+  [`amphorabackend.md`](amphorabackend.md). Onboarding to DR is planned
+  post-cleanup; if you cut over before that's done, accept the loss or
+  emergency-restore from offsite backups (if any exist).
+- **`amphora_logs_13`** on PREMIUM-2022 is shipped but NOT applied on
+  RESERV (chain-break since 2026-04-21; daemon explicitly skips it via
+  `--ignoreDatabases`). If the standby is needed urgently for this DB,
+  manual re-seed required.

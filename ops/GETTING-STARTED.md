@@ -164,5 +164,6 @@ Edit `ExcludeListShip` (and `ExcludeListLocal` if needed) in `ops/config/shared.
 - Monitoring dashboards / alerting queries (`ops/monitoring/`)
 - Failback runbook after primary rebuild
 - Automated cert-backup-to-offline-vault script
+- **`AmphoraBackend` on SQL-2022's second instance** — not yet in DR; ~250 GB with multi-year-old data, blocked on retention cleanup. See [`runbooks/amphorabackend.md`](runbooks/amphorabackend.md) for the inventory + onboarding plan.
 
 Each of those is its own follow-up.
